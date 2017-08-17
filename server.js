@@ -1,14 +1,7 @@
-//var http = require('http');
-//
-//var server = http.createServer(function(req, res) {
-//    res.writeHead(200);
-//    res.end('Salut tout le monde !');
-//});
-//server.listen(8080);
-
 var express = require('express');
-
 var app = express();
+
+var index = require('./Routes/index');
 
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
@@ -17,13 +10,5 @@ app.use((req, res, next) => {
     next();
 });
 
-app.get('/', function(req, res) {
-    res.setHeader('Content-Type', 'text/plain');
-    res.status(200).json({
-        test : 'succeedeed'
-    });
-});
-
-
-
+app.use('/', index)
 app.listen(8080);
