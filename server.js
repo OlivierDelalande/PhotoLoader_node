@@ -1,7 +1,8 @@
-var express = require('express');
-var app = express();
+const express = require('express');
+const app = express();
+const bodyParser = require('body-parser');
 
-var index = require('./Routes/index');
+const index = require('./Routes/index');
 
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
@@ -10,5 +11,7 @@ app.use((req, res, next) => {
     next();
 });
 
-app.use('/', index)
+app.use(bodyParser.json());
+
+app.use('/', index);
 app.listen(8080);

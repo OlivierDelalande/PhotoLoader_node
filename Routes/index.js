@@ -1,11 +1,13 @@
-var express = require('express');
-var router = express.Router();
+const express = require('express');
+const router = express.Router();
 
-router.get('/', function(req, res) {
-    res.setHeader('Content-Type', 'text/plain');
+router.post('/', function(req, res) {
+    const frontjson = req.body;
+    console.log('json from front', frontjson);
     res.status(200).json({
-        test : 'succeedeed'
+        test : 'wwww.google.com'
     });
 });
+
 
 module.exports = router;
