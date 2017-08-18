@@ -25,3 +25,13 @@ exports.addMessage = functions.https.onRequest((req, res) => {
         res.redirect(303, snapshot.ref);
     });
 });
+
+exports.sendUrl = functions.https.onRequest((req, res) => {
+    console.log('hello');
+    console.log('sendurl', req.body);
+    const frontjson = req.body;
+    console.log('json from front', frontjson);
+    res.status(200).json({
+        test : 'wwww.google2.com'
+    });
+});
