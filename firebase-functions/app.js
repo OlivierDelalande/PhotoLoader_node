@@ -13,5 +13,17 @@ app.use((req, res, next) => {
 
 app.use(bodyParser.json());
 
-app.use('/', index);
+app.get('/', function(req, res) {
+    res.setHeader('Content-Type', 'text/plain');
+    res.status(200).send('welcome in node');
+});
+
+app.post('/', function(req, res) {
+    const frontjson = req.body;
+    console.log('json from front', frontjson);
+    res.status(200).json({
+        test : 'wwww.google.com'
+    });
+});
+
 app.listen(8080);
