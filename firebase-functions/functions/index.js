@@ -8,10 +8,7 @@ admin.initializeApp(functions.config().firebase);
 const express = require('express');
 const app = express();
 const bodyParser = require('body-parser');
-//const multer = require("multer");
 const formidable = require('formidable');
-const http = require('http');
-const util = require('util');
 
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
@@ -49,48 +46,11 @@ app.use(bodyParser.urlencoded({ extended: true }));
             }
             console.log('files', files);
             console.log('req',req);
-            console.log('req',req.body);
             res.status(200).json({
                 test: 'wwww.picture.com',
                 test2: files
             });
-        //    res.writeHead(200, {'content-type': 'text/plain'});
-        //    res.write('received upload:\n\n');
-        //
-        //    // This last line responds to the form submission with a list of the parsed data and files.
-        //
-        //    res.end(util.inspect({fields: fields, files: files}));
-        //});
-        //return;
-        //
-        //console.log('picture back');
-        //console.log('req',req);
-        //console.log('req',req.body);
-        //res.status(200).json({
-        //    test: 'wwww.picture.com'
         });
     });
 
-//app.post("/upload", multer({dest: "./uploads/"}).array("logo angular.png", 12), function(req, res) {
-//    res.send(req.files);
-//});
-
 exports.api = functions.https.onRequest(app);
-
-//var form = new formidable.IncomingForm();
-//form.parse(req, function(err, fields, files) {
-//    if (err) {
-//
-//        // Check for and handle any errors here.
-//
-//        console.error(err.message);
-//        return;
-//    }
-//    res.writeHead(200, {'content-type': 'text/plain'});
-//    res.write('received upload:\n\n');
-//
-//    // This last line responds to the form submission with a list of the parsed data and files.
-//
-//    res.end(util.inspect({fields: fields, files: files}));
-//});
-//return;
