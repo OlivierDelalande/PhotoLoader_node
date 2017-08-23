@@ -9,6 +9,18 @@ const express = require('express');
 const app = express();
 const bodyParser = require('body-parser');
 const formidable = require('formidable');
+const fs = require('fs');
+const config = {
+    //projectId: 'a1be77b9425df2844f0674e2c0257cff2b2ba6d9',
+    projectId: 'doppleruploadfile',
+    keyFilename: './keyfile.json'
+};
+const storage = require('@google-cloud/storage')(config);
+
+//const gcs = storage({
+//    projectId: 'doppleruploadfile',
+//    keyFilename: './keyfile.json'
+//});
 
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
@@ -46,6 +58,16 @@ app.use(bodyParser.urlencoded({ extended: true }));
             }
             console.log('files', files);
             console.log('req',req);
+
+            const bucket = storage.bucket('deuploadfile');
+
+            bucket.upload(files.name, function(err, file) {
+                if (!err) {
+                    // "zebra.jpg" is now in your bucket.
+                }
+                console.log(file);
+            });
+
             res.status(200).json({
                 test: 'wwww.picture.com',
                 test2: files
