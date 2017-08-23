@@ -9,6 +9,12 @@ const express = require('express');
 const app = express();
 const bodyParser = require('body-parser');
 const formidable = require('formidable');
+const fs = require('fs');
+var gcs = require('@google-cloud/storage')({
+    projectId: 'doppleruploadfile',
+    keyFilename: './keyfile.json'
+
+});
 
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
@@ -44,6 +50,15 @@ app.use(bodyParser.urlencoded({ extended: true }));
                 console.error(err.message);
                 return;
             }
+
+            const bucket = gcs.bucket('deuploadfile');
+
+            bucket.upload('files.name', function(err, file) {
+                if (!err) {
+                    console.log(file);
+                }
+            });
+
             console.log('files', files);
             console.log('req',req);
             res.status(200).json({
