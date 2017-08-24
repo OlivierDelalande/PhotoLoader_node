@@ -26,6 +26,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
     });
 
     app.post('/', function (req, res) {
+
         const frontjson = req.body;
         console.log('json from front', frontjson);
         res.status(200).json({
@@ -44,13 +45,49 @@ app.use(bodyParser.urlencoded({ extended: true }));
                 console.error(err.message);
                 return;
             }
-            console.log('files', files);
-            console.log('req',req);
-            res.status(200).json({
-                test: 'wwww.picture.com',
-                test2: files
+            console.log('files', files.uploadFile);
+
+
+            const fs = require('fs');
+            const gcs = require('@google-cloud/storage')({
+                projectId: 'doppleruploadfile',
+                keyFilename: './keyfile.json'
             });
+
+            const bucket = gcs.bucket('deuploadfile');
+
+            const blob = bucket.file(files.uploadFile.name);
+            const blobStream = blob.createWriteStream();
+
+            blobStream.on('error', (err) => {
+                next(err);
+            });
+
+            blobStream.on('finish', () => {
+                // The public URL can be used to directly access the file via HTTP.
+                const publicUrl = format(`https://storage.googleapis.com/${bucket.name}/${blob.name}`);
+                console.log('publicUrl', publicUrl);
+                res.status(200).send(publicUrl);
+            });
+            //bucket.upload(files.uploadFile.path+ files.uploadFile.name, function(err, file) {
+            //    if (!err) {
+            //        console.log(file);
+            //    }
+            //    console.error(err);
+            //});
+
+            //const mypath = files.uploadFile.path.replace('/tmp/', '');
+            //console.log('mypath', mypath);
+            //
+            //const tmp = 'storage.googleapis.com/deuploadfile/' + mypath;
+            //console.log('tmp', tmp);
+            //
+            //res.status(200).json({
+            //    url: publicUrl,
+            //    test2: files
+            //});
         });
     });
 
 exports.api = functions.https.onRequest(app);
+
