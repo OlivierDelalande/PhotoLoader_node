@@ -56,36 +56,48 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
             const bucket = gcs.bucket('deuploadfile');
 
-            const blob = bucket.file(files.uploadFile.name);
-            const blobStream = blob.createWriteStream();
-
-            blobStream.on('error', (err) => {
-                next(err);
+            //console.log('files.uploadFile.name1', files.uploadFile.name);
+            //
+            //const blob = bucket.file(files.uploadFile.name);
+            //
+            //console.log('files.uploadFile.name2', files.uploadFile.name);
+            //
+            //const blobStream = blob.createWriteStream();
+            //
+            //console.log('files.uploadFile.name3', files.uploadFile.name);
+            //
+            //blobStream.on('error', (err) => {
+            //    next(err);
+            //});
+            //
+            //console.log('files.uploadFile.name4', files.uploadFile.name);
+            //
+            //blobStream.on('finish', () => {
+            //    console.log('blobstreamonfinish');
+            //    //console.log('bucket', bucket);
+            //    //console.log('blob', blob);
+            //    // The public URL can be used to directly access the file via HTTP.
+            //    //const publicUrl = format(`https://storage.googleapis.com/${bucket.name}/${blob.name}`);
+            //    //console.log('publicUrl', publicUrl);
+            //    res.status(200).send('hello');
+            //});
+            bucket.upload(files.uploadFile.path, function(err, file) {
+                if (!err) {
+                    console.log(file);
+                }
+                console.error(err);
             });
 
-            blobStream.on('finish', () => {
-                // The public URL can be used to directly access the file via HTTP.
-                const publicUrl = format(`https://storage.googleapis.com/${bucket.name}/${blob.name}`);
-                console.log('publicUrl', publicUrl);
-                res.status(200).send(publicUrl);
-            });
-            //bucket.upload(files.uploadFile.path+ files.uploadFile.name, function(err, file) {
-            //    if (!err) {
-            //        console.log(file);
-            //    }
-            //    console.error(err);
-            //});
+            const mypath = files.uploadFile.path.replace('/tmp/', '');
+            console.log('mypath', mypath);
 
-            //const mypath = files.uploadFile.path.replace('/tmp/', '');
-            //console.log('mypath', mypath);
-            //
-            //const tmp = 'storage.googleapis.com/deuploadfile/' + mypath;
-            //console.log('tmp', tmp);
-            //
-            //res.status(200).json({
-            //    url: publicUrl,
-            //    test2: files
-            //});
+            const tmp = 'storage.googleapis.com/deuploadfile/' + mypath;
+            console.log('tmp', tmp);
+
+            res.status(200).json({
+                url: tmp,
+                test2: files
+            });
         });
     });
 
