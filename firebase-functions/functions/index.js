@@ -56,7 +56,8 @@ app.post('/uploads', function(req, res) {
 
         sharp(req.file.buffer)
             .resize(150, 150)
-            .max()
+            .crop()
+            //.max()
             .toBuffer()
             .then(data => {
                 console.log('resize', data);
