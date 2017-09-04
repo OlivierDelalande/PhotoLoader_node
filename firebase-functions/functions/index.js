@@ -1,105 +1,127 @@
-// The Cloud Functions for Firebase SDK to create Cloud Functions and setup triggers.
 const functions = require('firebase-functions');
-
-// The Firebase Admin SDK to access the Firebase Realtime Database.
 const admin = require('firebase-admin');
 admin.initializeApp(functions.config().firebase);
 
 const express = require('express');
 const app = express();
 const bodyParser = require('body-parser');
-const formidable = require('formidable');
+const multer = require('multer');
+const format = require('util').format;
+const fs = require('fs');
+const gcs = require('@google-cloud/storage')({
+    projectId: 'doppleruploadfile',
+    keyFilename: './keyfile.json'
+});
+const bucket = gcs.bucket('deuploadfile');
+const sharp = require('sharp');
 
-app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-    res.header('Access-Control-Allow-Methods', 'POST, GET, PUT, DELETE, OPTIONS');
+app.use(function(req, res, next) { //allow cross origin requests
+    res.setHeader("Access-Control-Allow-Methods", "POST, PUT, OPTIONS, DELETE, GET");
+    res.header("Access-Control-Allow-Origin", "http://localhost:4200");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+    res.header("Access-Control-Allow-Credentials", true);
     next();
 });
 
 app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
 
-    app.get('/', function (req, res) {
-        res.setHeader('Content-Type', 'text/plain');
-        res.status(200).send('welcome in node');
+const storage = multer.diskStorage({ //multers disk storage settings
+    destination: function (req, file, cb) {
+        cb(null, './uploads/');
+    },
+    filename: function (req, file, cb) {
+        const datetimestamp = Date.now();
+        cb(null, file.fieldname + '-' + datetimestamp + '.' + file.originalname.split('.')[file.originalname.split('.').length -1]);
+    }
+});
+
+const upload = multer({ // multer settings
+    storage: multer.memoryStorage()
+}).single('photo');
+
+app.get('/', function(req, res, next) {
+// render the index page, and pass data to it.
+    res.send('working');
+});
+
+/** API path that will uploads the files */
+
+app.post('/uploads', function(req, res) {
+
+    upload(req, res, function (err) {
+
+        //blobCreateProcess(req.file.originalname, req.file.buffer, res)
+
+        //blobDeleteProcess(req.file.originalname);
+
+        sharp(req.file.buffer)
+            .resize(150, 150)
+            .max()
+            .toBuffer()
+            .then(data => {
+                console.log('resize', data);
+                blobCreateProcess(req.file.originalname, data, res)
+            })
+            .catch((err) => {
+                console.error('ERROR:', err);
+            });
     });
+});
 
-    app.post('/', function (req, res) {
+let blobDeleteProcess = function (fileName) {
+    let blob = bucket.file(fileName);
 
-        const frontjson = req.body;
-        console.log('json from front', frontjson);
-        res.status(200).json({
-            test: 'wwww.google.com'
+    blob
+        .delete()
+        .then(() => {
+            console.log('public');
+        })
+        .then(() => {
+            console.log('blob deleted');
+        })
+        .catch((err) => {
+            console.error('ERROR:', err);
         });
+};
+
+let blobCreateProcess = function (fileName, buffer, res) {
+
+    let blob = bucket.file(fileName);
+
+    let blobStream = blob.createWriteStream();
+
+    blobStream.on('error', (err) => {
+        console.error(err);
     });
 
-    app.post('/upload', function (req, res) {
+    blobStream.on('finish', () => {
+        console.log('inside blobStream');
+        const publicUrl = format(`https://storage.googleapis.com/${bucket.name}/${blob.name}`);
+        console.log(publicUrl);
 
-        const form = new formidable.IncomingForm();
-        form.parse(req, function(err, fields, files) {
-            if (err) {
+        blob
+            .makePublic()
+            .then(() => {
+                console.log('public');
+            })
+            .then(() => {
+                res.status(200).json({
+                    url: publicUrl
+                });
 
-                // Check for and handle any errors here.
-
-                console.error(err.message);
-                return;
-            }
-            console.log('files', files.uploadFile);
-
-
-            const fs = require('fs');
-            const gcs = require('@google-cloud/storage')({
-                projectId: 'doppleruploadfile',
-                keyFilename: './keyfile.json'
+            })
+            .catch((err) => {
+                console.error('ERROR:', err);
             });
 
-            const bucket = gcs.bucket('deuploadfile');
-
-            //console.log('files.uploadFile.name1', files.uploadFile.name);
-            //
-            //const blob = bucket.file(files.uploadFile.name);
-            //
-            //console.log('files.uploadFile.name2', files.uploadFile.name);
-            //
-            //const blobStream = blob.createWriteStream();
-            //
-            //console.log('files.uploadFile.name3', files.uploadFile.name);
-            //
-            //blobStream.on('error', (err) => {
-            //    next(err);
-            //});
-            //
-            //console.log('files.uploadFile.name4', files.uploadFile.name);
-            //
-            //blobStream.on('finish', () => {
-            //    console.log('blobstreamonfinish');
-            //    //console.log('bucket', bucket);
-            //    //console.log('blob', blob);
-            //    // The public URL can be used to directly access the file via HTTP.
-            //    //const publicUrl = format(`https://storage.googleapis.com/${bucket.name}/${blob.name}`);
-            //    //console.log('publicUrl', publicUrl);
-            //    res.status(200).send('hello');
-            //});
-            bucket.upload(files.uploadFile.path, function(err, file) {
-                if (!err) {
-                    console.log(file);
-                }
-                console.error(err);
-            });
-
-            const mypath = files.uploadFile.path.replace('/tmp/', '');
-            console.log('mypath', mypath);
-
-            const tmp = 'storage.googleapis.com/deuploadfile/' + mypath;
-            console.log('tmp', tmp);
-
-            res.status(200).json({
-                url: tmp,
-                test2: files
-            });
-        });
     });
+
+    blobStream.end(buffer);
+
+};
 
 exports.api = functions.https.onRequest(app);
 
+//app.listen('3001', function(){
+//    console.log('running on 3001...');
+//});
