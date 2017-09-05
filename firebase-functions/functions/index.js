@@ -37,39 +37,107 @@ const storage = multer.diskStorage({ //multers disk storage settings
 
 const upload = multer({ // multer settings
     storage: multer.memoryStorage()
-}).single('photo');
+}).single('picture');
 
 app.get('/', function(req, res, next) {
 // render the index page, and pass data to it.
     res.send('working');
 });
 
-/** API path that will uploads the files */
 
 app.post('/uploads', function(req, res) {
 
     upload(req, res, function (err) {
 
-        //blobCreateProcess(req.file.originalname, req.file.buffer, res)
+        let pictureSizes = [
+            {
+                width: 600,
+                height: 600
+            },
+            {
+                width: 300,
+                height: 300
+            },
+            {
+                width: 150,
+                height: 150
+            }
+        ];
 
-        //blobDeleteProcess(req.file.originalname);
+        let buffer = req.file.buffer;
+        let name = req.file.originalname;
 
-        sharp(req.file.buffer)
-            .resize(150, 150)
-            .crop()
-            //.max()
-            .toBuffer()
-            .then(data => {
-                console.log('resize', data);
-                blobCreateProcess(req.file.originalname, data, res)
-            })
-            .catch((err) => {
-                console.error('ERROR:', err);
+        let name2 = name + pictureSizes[1].width;
+        let name3 = name + pictureSizes[2].width;
+        name = name + pictureSizes[0].width;
+
+        let promiseArray = [
+            resize(buffer, name, pictureSizes[0].width, pictureSizes[0].height),
+            resize(buffer, name2, pictureSizes[1].width, pictureSizes[1].height),
+            resize(buffer, name3, pictureSizes[2].width, pictureSizes[2].height),
+        ];
+
+        Promise.all(promiseArray).then(values => {
+            console.log('values', values);
+
+            res.status(200).json({
+                url: 'publicUrl'
             });
+        }, err => {
+            console.log('err', err)
+        });
+
     });
 });
 
+let resize = function (picture, name, width, height) {
+    console.log('inside resize');
+
+    return sharp(picture)
+        .resize(width, height)
+        .crop()
+        .toBuffer()
+        .then(buffer => {
+            return blobCreateProcess(name, buffer);
+        })
+        .catch((err) => {
+            console.error('ERROR:', err);
+        });
+};
+
+let blobCreateProcess = function (fileName, buffer) {
+
+    let blob = bucket.file(fileName);
+    let blobStream = blob.createWriteStream();
+
+    blobStream.on('error', (err) => {
+        console.error(err);
+    });
+
+    return new Promise((resolve, reject) => {
+        blobStream.on('finish', () => {
+            const publicUrl = format(`https://storage.googleapis.com/${bucket.name}/${blob.name}`);
+
+            blob
+                .makePublic()
+                .then(() => {
+                    console.log('publicUrl', publicUrl);
+                    resolve(fileName, publicUrl);
+                })
+                .catch((err) => {
+                    console.error('ERROR:', err);
+                    reject(err);
+                });
+
+        });
+    });
+
+    blobStream.end(buffer);
+
+};
+
 let blobDeleteProcess = function (fileName) {
+
     let blob = bucket.file(fileName);
 
     blob
@@ -83,42 +151,6 @@ let blobDeleteProcess = function (fileName) {
         .catch((err) => {
             console.error('ERROR:', err);
         });
-};
-
-let blobCreateProcess = function (fileName, buffer, res) {
-
-    let blob = bucket.file(fileName);
-
-    let blobStream = blob.createWriteStream();
-
-    blobStream.on('error', (err) => {
-        console.error(err);
-    });
-
-    blobStream.on('finish', () => {
-        console.log('inside blobStream');
-        const publicUrl = format(`https://storage.googleapis.com/${bucket.name}/${blob.name}`);
-        console.log(publicUrl);
-
-        blob
-            .makePublic()
-            .then(() => {
-                console.log('public');
-            })
-            .then(() => {
-                res.status(200).json({
-                    url: publicUrl
-                });
-
-            })
-            .catch((err) => {
-                console.error('ERROR:', err);
-            });
-
-    });
-
-    blobStream.end(buffer);
-
 };
 
 exports.api = functions.https.onRequest(app);
