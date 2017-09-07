@@ -1,6 +1,6 @@
-const functions = require('firebase-functions');
-const admin = require('firebase-admin');
-admin.initializeApp(functions.config().firebase);
+//const functions = require('firebase-functions');
+//const admin = require('firebase-admin');
+//admin.initializeApp(functions.config().firebase);
 
 const express = require('express');
 const app = express();
@@ -15,7 +15,7 @@ const gcs = require('@google-cloud/storage')({
 const bucket = gcs.bucket('deuploadfile');
 const sharp = require('sharp');
 
-app.use(function(req, res, next) { //allow cross origin requests
+app.use(function (req, res, next) { //allow cross origin requests
     res.setHeader("Access-Control-Allow-Methods", "POST, PUT, OPTIONS, DELETE, GET");
     res.header("Access-Control-Allow-Origin", "http://localhost:4200");
     res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
@@ -31,67 +31,72 @@ const storage = multer.diskStorage({ //multers disk storage settings
     },
     filename: function (req, file, cb) {
         const datetimestamp = Date.now();
-        cb(null, file.fieldname + '-' + datetimestamp + '.' + file.originalname.split('.')[file.originalname.split('.').length -1]);
+        cb(null, file.fieldname + '-' + datetimestamp + '.' + file.originalname.split('.')[file.originalname.split('.').length - 1]);
     }
 });
 
 const upload = multer({ // multer settings
     storage: multer.memoryStorage()
-}).single('picture');
+}).any();
 
-app.get('/', function(req, res, next) {
+app.get('/', function (req, res, next) {
 // render the index page, and pass data to it.
     res.send('working');
 });
 
+app.post('/uploads', function (req, res) {
 
-app.post('/uploads', function(req, res) {
+    //console.log('req.body', req.body);
+    //console.log('req', req);
 
     upload(req, res, function (err) {
 
-        let pictureSizes = [
-            {
-                width: 600,
-                height: 600
-            },
-            {
-                width: 300,
-                height: 300
-            },
-            {
-                width: 150,
-                height: 150
-            }
-        ];
+        console.log('body', req.body);
+        console.log('files', req.files);
 
-        let buffer = req.file.buffer;
-        let name = req.file.originalname;
+        let buffer = req.files[0].buffer;
 
-        let name2 = name + pictureSizes[1].width;
-        let name3 = name + pictureSizes[2].width;
-        name = name + pictureSizes[0].width;
+        let tab = req.files[0].originalname.split('.')
+        let name = tab[0];
+        let extension = tab[1];
+        let pictureSizes = JSON.parse(req.body.sizes);
 
-        let promiseArray = [
-            resize(buffer, name, pictureSizes[0].width, pictureSizes[0].height),
-            resize(buffer, name2, pictureSizes[1].width, pictureSizes[1].height),
-            resize(buffer, name3, pictureSizes[2].width, pictureSizes[2].height),
-        ];
+        console.log('pictureSizes.length', pictureSizes.length);
+        console.log('pictureSizes', pictureSizes);
+
+        let pictures = [];
+        for (i = 1; i < pictureSizes.length; i++) {
+            pictures[i] = name + pictureSizes[i].width + "." + extension;
+        }
+
+        pictures[0] = name + pictureSizes[0].width + "." + extension;
+
+        let promiseArray = [];
+
+        for (i = 0 ; i < pictureSizes.length; i++ ) {
+            promiseArray.push(resize(buffer, pictures[i], pictureSizes[i].width, pictureSizes[i].height));
+        }
+
+        console.log('promiseArray', promiseArray);
 
         Promise.all(promiseArray).then(values => {
-            console.log('values', values);
+            console.log('values end', values);
 
             res.status(200).json({
-                url: 'publicUrl'
+                url1: values[0],
+                url2: values[1],
+                url3: values[2],
             });
         }, err => {
-            console.log('err', err)
+            console.log('err', err);
         });
+
+        //blobDeleteProcess('RG300.jpg');
 
     });
 });
 
 let resize = function (picture, name, width, height) {
-    console.log('inside resize');
 
     return sharp(picture)
         .resize(width, height)
@@ -121,30 +126,27 @@ let blobCreateProcess = function (fileName, buffer) {
             blob
                 .makePublic()
                 .then(() => {
-                    console.log('publicUrl', publicUrl);
-                    resolve(fileName, publicUrl);
+                    resolve(publicUrl);
                 })
                 .catch((err) => {
                     console.error('ERROR:', err);
                     reject(err);
                 });
-
         });
+        blobStream.end(buffer);
     });
 
-    blobStream.end(buffer);
 
 };
 
 let blobDeleteProcess = function (fileName) {
 
+    // Deletion needs a filename with its extension
+
     let blob = bucket.file(fileName);
 
     blob
         .delete()
-        .then(() => {
-            console.log('public');
-        })
         .then(() => {
             console.log('blob deleted');
         })
@@ -153,8 +155,8 @@ let blobDeleteProcess = function (fileName) {
         });
 };
 
-exports.api = functions.https.onRequest(app);
+//exports.api = functions.https.onRequest(app);
 
-//app.listen('3001', function(){
-//    console.log('running on 3001...');
-//});
+app.listen('3001', function(){
+    console.log('running on 3001...');
+});
