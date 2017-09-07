@@ -1,6 +1,6 @@
-//const functions = require('firebase-functions');
-//const admin = require('firebase-admin');
-//admin.initializeApp(functions.config().firebase);
+const functions = require('firebase-functions');
+const admin = require('firebase-admin');
+admin.initializeApp(functions.config().firebase);
 
 const express = require('express');
 const app = express();
@@ -35,40 +35,26 @@ const storage = multer.diskStorage({ //multers disk storage settings
     }
 });
 
-const upload = multer({ // multer settings
+const upload = multer({
     storage: multer.memoryStorage()
 }).any();
 
-app.get('/', function (req, res, next) {
-// render the index page, and pass data to it.
-    res.send('working');
-});
-
 app.post('/uploads', function (req, res) {
-
-    //console.log('req.body', req.body);
-    //console.log('req', req);
 
     upload(req, res, function (err) {
 
-        console.log('body', req.body);
-        console.log('files', req.files);
-
         let buffer = req.files[0].buffer;
 
-        let tab = req.files[0].originalname.split('.')
+        let baseUrl = 'https://storage.googleapis.com/deuploadfile/';
+        let tab = req.files[0].originalname.split('.');
         let name = tab[0];
         let extension = tab[1];
         let pictureSizes = JSON.parse(req.body.sizes);
-
-        console.log('pictureSizes.length', pictureSizes.length);
-        console.log('pictureSizes', pictureSizes);
 
         let pictures = [];
         for (i = 1; i < pictureSizes.length; i++) {
             pictures[i] = name + pictureSizes[i].width + "." + extension;
         }
-
         pictures[0] = name + pictureSizes[0].width + "." + extension;
 
         let promiseArray = [];
@@ -77,18 +63,16 @@ app.post('/uploads', function (req, res) {
             promiseArray.push(resize(buffer, pictures[i], pictureSizes[i].width, pictureSizes[i].height));
         }
 
-        console.log('promiseArray', promiseArray);
-
         Promise.all(promiseArray).then(values => {
-            console.log('values end', values);
+            console.log(values);
 
             res.status(200).json({
-                url1: values[0],
-                url2: values[1],
-                url3: values[2],
+                baseUrl: baseUrl,
+                pictures: pictures
             });
         }, err => {
             console.log('err', err);
+            res.send('Loading error')
         });
 
         //blobDeleteProcess('RG300.jpg');
@@ -155,8 +139,4 @@ let blobDeleteProcess = function (fileName) {
         });
 };
 
-//exports.api = functions.https.onRequest(app);
-
-app.listen('3001', function(){
-    console.log('running on 3001...');
-});
+exports.api = functions.https.onRequest(app);
