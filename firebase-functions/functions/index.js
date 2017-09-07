@@ -1,105 +1,142 @@
-// The Cloud Functions for Firebase SDK to create Cloud Functions and setup triggers.
 const functions = require('firebase-functions');
-
-// The Firebase Admin SDK to access the Firebase Realtime Database.
 const admin = require('firebase-admin');
 admin.initializeApp(functions.config().firebase);
 
 const express = require('express');
 const app = express();
 const bodyParser = require('body-parser');
-const formidable = require('formidable');
+const multer = require('multer');
+const format = require('util').format;
+const fs = require('fs');
+const gcs = require('@google-cloud/storage')({
+    projectId: 'doppleruploadfile',
+    keyFilename: './keyfile.json'
+});
+const bucket = gcs.bucket('deuploadfile');
+const sharp = require('sharp');
 
-app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-    res.header('Access-Control-Allow-Methods', 'POST, GET, PUT, DELETE, OPTIONS');
+app.use(function (req, res, next) { //allow cross origin requests
+    res.setHeader("Access-Control-Allow-Methods", "POST, PUT, OPTIONS, DELETE, GET");
+    res.header("Access-Control-Allow-Origin", "http://localhost:4200");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+    res.header("Access-Control-Allow-Credentials", true);
     next();
 });
 
 app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
 
-    app.get('/', function (req, res) {
-        res.setHeader('Content-Type', 'text/plain');
-        res.status(200).send('welcome in node');
-    });
+const storage = multer.diskStorage({ //multers disk storage settings
+    destination: function (req, file, cb) {
+        cb(null, './uploads/');
+    },
+    filename: function (req, file, cb) {
+        const datetimestamp = Date.now();
+        cb(null, file.fieldname + '-' + datetimestamp + '.' + file.originalname.split('.')[file.originalname.split('.').length - 1]);
+    }
+});
 
-    app.post('/', function (req, res) {
+const upload = multer({
+    storage: multer.memoryStorage()
+}).any();
 
-        const frontjson = req.body;
-        console.log('json from front', frontjson);
-        res.status(200).json({
-            test: 'wwww.google.com'
-        });
-    });
+app.post('/uploads', function (req, res) {
 
-    app.post('/upload', function (req, res) {
+    upload(req, res, function (err) {
 
-        const form = new formidable.IncomingForm();
-        form.parse(req, function(err, fields, files) {
-            if (err) {
+        let buffer = req.files[0].buffer;
 
-                // Check for and handle any errors here.
+        let baseUrl = 'https://storage.googleapis.com/deuploadfile/';
+        let tab = req.files[0].originalname.split('.');
+        let name = tab[0];
+        let extension = tab[1];
+        let pictureSizes = JSON.parse(req.body.sizes);
 
-                console.error(err.message);
-                return;
-            }
-            console.log('files', files.uploadFile);
+        let pictures = [];
+        for (i = 1; i < pictureSizes.length; i++) {
+            pictures[i] = name + pictureSizes[i].width + "." + extension;
+        }
+        pictures[0] = name + pictureSizes[0].width + "." + extension;
 
+        let promiseArray = [];
 
-            const fs = require('fs');
-            const gcs = require('@google-cloud/storage')({
-                projectId: 'doppleruploadfile',
-                keyFilename: './keyfile.json'
-            });
+        for (i = 0 ; i < pictureSizes.length; i++ ) {
+            promiseArray.push(resize(buffer, pictures[i], pictureSizes[i].width, pictureSizes[i].height));
+        }
 
-            const bucket = gcs.bucket('deuploadfile');
-
-            //console.log('files.uploadFile.name1', files.uploadFile.name);
-            //
-            //const blob = bucket.file(files.uploadFile.name);
-            //
-            //console.log('files.uploadFile.name2', files.uploadFile.name);
-            //
-            //const blobStream = blob.createWriteStream();
-            //
-            //console.log('files.uploadFile.name3', files.uploadFile.name);
-            //
-            //blobStream.on('error', (err) => {
-            //    next(err);
-            //});
-            //
-            //console.log('files.uploadFile.name4', files.uploadFile.name);
-            //
-            //blobStream.on('finish', () => {
-            //    console.log('blobstreamonfinish');
-            //    //console.log('bucket', bucket);
-            //    //console.log('blob', blob);
-            //    // The public URL can be used to directly access the file via HTTP.
-            //    //const publicUrl = format(`https://storage.googleapis.com/${bucket.name}/${blob.name}`);
-            //    //console.log('publicUrl', publicUrl);
-            //    res.status(200).send('hello');
-            //});
-            bucket.upload(files.uploadFile.path, function(err, file) {
-                if (!err) {
-                    console.log(file);
-                }
-                console.error(err);
-            });
-
-            const mypath = files.uploadFile.path.replace('/tmp/', '');
-            console.log('mypath', mypath);
-
-            const tmp = 'storage.googleapis.com/deuploadfile/' + mypath;
-            console.log('tmp', tmp);
+        Promise.all(promiseArray).then(values => {
+            console.log(values);
 
             res.status(200).json({
-                url: tmp,
-                test2: files
+                baseUrl: baseUrl,
+                pictures: pictures
             });
+        }, err => {
+            console.log('err', err);
+            res.send('Loading error')
         });
+
+        //blobDeleteProcess('RG300.jpg');
+
+    });
+});
+
+let resize = function (picture, name, width, height) {
+
+    return sharp(picture)
+        .resize(width, height)
+        .crop()
+        .toBuffer()
+        .then(buffer => {
+            return blobCreateProcess(name, buffer);
+        })
+        .catch((err) => {
+            console.error('ERROR:', err);
+        });
+};
+
+let blobCreateProcess = function (fileName, buffer) {
+
+    let blob = bucket.file(fileName);
+    let blobStream = blob.createWriteStream();
+
+    blobStream.on('error', (err) => {
+        console.error(err);
     });
 
-exports.api = functions.https.onRequest(app);
+    return new Promise((resolve, reject) => {
+        blobStream.on('finish', () => {
+            const publicUrl = format(`https://storage.googleapis.com/${bucket.name}/${blob.name}`);
 
+            blob
+                .makePublic()
+                .then(() => {
+                    resolve(publicUrl);
+                })
+                .catch((err) => {
+                    console.error('ERROR:', err);
+                    reject(err);
+                });
+        });
+        blobStream.end(buffer);
+    });
+
+
+};
+
+let blobDeleteProcess = function (fileName) {
+
+    // Deletion needs a filename with its extension
+
+    let blob = bucket.file(fileName);
+
+    blob
+        .delete()
+        .then(() => {
+            console.log('blob deleted');
+        })
+        .catch((err) => {
+            console.error('ERROR:', err);
+        });
+};
+
+exports.api = functions.https.onRequest(app);
