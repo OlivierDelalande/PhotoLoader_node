@@ -88,16 +88,30 @@ app.post('/uploads', function (req, res) {
 
 
 let resize = function (picture, name, width, height) {
-    return sharp(picture)
-        .resize(width, height)
-        .crop()
-        .toBuffer()
-        .then(buffer => {
-            return blobCreateProcess(name, buffer);
-        })
-        .catch((err) => {
-            console.error('ERROR:', err);
-        });
+
+    if (width == height) {
+        return sharp(picture)
+            .resize(width, height)
+            .crop()
+            .toBuffer()
+            .then(buffer => {
+                return blobCreateProcess(name, buffer);
+            })
+            .catch((err) => {
+                console.error('ERROR:', err);
+            });
+    } else {
+        return sharp(picture)
+            .resize(width, height)
+            .max()
+            .toBuffer()
+            .then(buffer => {
+                return blobCreateProcess(name, buffer);
+            })
+            .catch((err) => {
+                console.error('ERROR:', err);
+            });
+    }
 };
 
 
