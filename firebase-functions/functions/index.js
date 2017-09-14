@@ -2,17 +2,17 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const serviceAccount = require("./keyfile.json");
 
-//admin.initializeApp(functions.config({
-//    credential: admin.credential.cert(serviceAccount),
-//    databaseURL: "https://photo-loader.firebaseio.com",
-//    storageBucket: "gs://photo-loader.appspot.com/"
-//}).firebase);
-
-admin.initializeApp({
+admin.initializeApp(functions.config({
     credential: admin.credential.cert(serviceAccount),
-    databaseURL:  "https://photo-loader.firebaseio.com",
+    databaseURL: "https://photo-loader.firebaseio.com",
     storageBucket: "gs://photo-loader.appspot.com/"
-});
+}).firebase);
+
+//admin.initializeApp({
+//    credential: admin.credential.cert(serviceAccount),
+//    databaseURL:  "https://photo-loader.firebaseio.com",
+//    storageBucket: "gs://photo-loader.appspot.com/"
+//});
 
 const express = require('express');
 const app = express();
@@ -22,6 +22,7 @@ const format = require('util').format;
 
 const fs = require('fs');
 const sharp = require('sharp');
+const stream = require('stream');
 
 app.use(function (req, res, next) { //allow cross origin requests
     res.setHeader("Access-Control-Allow-Methods", "POST, PUT, OPTIONS, DELETE, GET");
@@ -49,7 +50,6 @@ const upload = multer({
 
 
 app.post('/uploads', function (req, res) {
-
     upload(req, res, function (err) {
 
         let buffer = req.files[0].buffer;
@@ -81,14 +81,13 @@ app.post('/uploads', function (req, res) {
             res.send('Loading error')
         });
 
-    //    //blobDeleteProcess('RG300.jpg');
-    //
+        //    //blobDeleteProcess('RG300.jpg');
+        //
     });
 });
 
 
 let resize = function (picture, name, width, height) {
-
     return sharp(picture)
         .resize(width, height)
         .crop()
@@ -103,10 +102,8 @@ let resize = function (picture, name, width, height) {
 
 
 let blobCreateProcess = function (fileName, buffer) {
-
     let bucket = admin.storage().bucket();
     let blob = bucket.file('images/' + fileName);
-    //blob.getSignedUrl({ action: 'read', expires: '03-17-2025'}).then(function(data) { console.log('data', data[0]); }).catch(err => console.log(err));
     let blobStream = blob.createWriteStream();
 
     return new Promise((resolve, reject) => {
@@ -121,8 +118,6 @@ let blobCreateProcess = function (fileName, buffer) {
             blob
                 .makePublic()
                 .then((data) => {
-                    console.log('data', data);
-            blob.getSignedUrl({ action: 'read', expires: '03-17-2025'}).then(function(data) { console.log('data', data[0]); }).catch(err => console.log(err));
                     resolve('publicUrl');
                 })
                 .catch((err) => {
@@ -134,25 +129,25 @@ let blobCreateProcess = function (fileName, buffer) {
     });
 
 };
-//
-//let blobDeleteProcess = function (fileName) {
-//
-//    // Deletion needs a filename with its extension
-//
-//    let blob = bucket.file(fileName);
-//
-//    blob
-//        .delete()
-//        .then(() => {
-//            console.log('blob deleted');
-//        })
-//        .catch((err) => {
-//            console.error('ERROR:', err);
-//        });
-//};
 
-//exports.api = functions.https.onRequest(app);
+let blobDeleteProcess = function (fileName) {
 
-app.listen('3001', function(){
-    console.log('running on 3001');
-});
+    // Deletion needs a filename with its extension
+
+    let blob = bucket.file(fileName);
+
+    blob
+        .delete()
+        .then(() => {
+            console.log('blob deleted');
+        })
+        .catch((err) => {
+            console.error('ERROR:', err);
+        });
+};
+
+exports.api = functions.https.onRequest(app);
+
+//app.listen('3001', function(){
+//    console.log('running on 3001');
+//});
