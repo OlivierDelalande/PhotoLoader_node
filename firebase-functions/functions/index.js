@@ -1,19 +1,28 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
-admin.initializeApp(functions.config().firebase);
+const serviceAccount = require("./keyfile.json");
+
+admin.initializeApp(functions.config({
+    credential: admin.credential.cert(serviceAccount),
+    databaseURL: "https://photo-loader.firebaseio.com",
+    storageBucket: "gs://photo-loader.appspot.com/"
+}).firebase);
+
+//admin.initializeApp({
+//    credential: admin.credential.cert(serviceAccount),
+//    databaseURL:  "https://photo-loader.firebaseio.com",
+//    storageBucket: "gs://photo-loader.appspot.com/"
+//});
 
 const express = require('express');
 const app = express();
 const bodyParser = require('body-parser');
 const multer = require('multer');
 const format = require('util').format;
+
 const fs = require('fs');
-const gcs = require('@google-cloud/storage')({
-    projectId: 'doppleruploadfile',
-    keyFilename: './keyfile.json'
-});
-const bucket = gcs.bucket('deuploadfile');
 const sharp = require('sharp');
+const stream = require('stream');
 
 app.use(function (req, res, next) { //allow cross origin requests
     res.setHeader("Access-Control-Allow-Methods", "POST, PUT, OPTIONS, DELETE, GET");
@@ -25,7 +34,7 @@ app.use(function (req, res, next) { //allow cross origin requests
 
 app.use(bodyParser.json());
 
-const storage = multer.diskStorage({ //multers disk storage settings
+const store = multer.diskStorage({ //multers disk storage settings
     destination: function (req, file, cb) {
         cb(null, './uploads/');
     },
@@ -39,13 +48,12 @@ const upload = multer({
     storage: multer.memoryStorage()
 }).any();
 
-app.post('/uploads', function (req, res) {
 
+app.post('/uploads', function (req, res) {
     upload(req, res, function (err) {
 
         let buffer = req.files[0].buffer;
 
-        let baseUrl = 'https://storage.googleapis.com/deuploadfile/';
         let tab = req.files[0].originalname.split('.');
         let name = tab[0];
         let extension = tab[1];
@@ -64,10 +72,8 @@ app.post('/uploads', function (req, res) {
         }
 
         Promise.all(promiseArray).then(values => {
-            console.log(values);
 
             res.status(200).json({
-                baseUrl: baseUrl,
                 pictures: pictures
             });
         }, err => {
@@ -75,13 +81,13 @@ app.post('/uploads', function (req, res) {
             res.send('Loading error')
         });
 
-        //blobDeleteProcess('RG300.jpg');
-
+        //    //blobDeleteProcess('RG300.jpg');
+        //
     });
 });
 
-let resize = function (picture, name, width, height) {
 
+let resize = function (picture, name, width, height) {
     return sharp(picture)
         .resize(width, height)
         .crop()
@@ -94,23 +100,25 @@ let resize = function (picture, name, width, height) {
         });
 };
 
-let blobCreateProcess = function (fileName, buffer) {
 
-    let blob = bucket.file(fileName);
+let blobCreateProcess = function (fileName, buffer) {
+    let bucket = admin.storage().bucket();
+    let blob = bucket.file('images/' + fileName);
     let blobStream = blob.createWriteStream();
 
-    blobStream.on('error', (err) => {
-        console.error(err);
-    });
-
     return new Promise((resolve, reject) => {
+
+        blobStream.on('error', (err) => {
+            console.error(err);
+            reject(err);
+        });
+
         blobStream.on('finish', () => {
-            const publicUrl = format(`https://storage.googleapis.com/${bucket.name}/${blob.name}`);
 
             blob
                 .makePublic()
-                .then(() => {
-                    resolve(publicUrl);
+                .then((data) => {
+                    resolve('publicUrl');
                 })
                 .catch((err) => {
                     console.error('ERROR:', err);
@@ -119,7 +127,6 @@ let blobCreateProcess = function (fileName, buffer) {
         });
         blobStream.end(buffer);
     });
-
 
 };
 
@@ -140,3 +147,7 @@ let blobDeleteProcess = function (fileName) {
 };
 
 exports.api = functions.https.onRequest(app);
+
+//app.listen('3001', function(){
+//    console.log('running on 3001');
+//});
