@@ -8,56 +8,46 @@ admin.initializeApp(functions.config({
     storageBucket: "gs://photo-loader.appspot.com/"
 }).firebase);
 
-//admin.initializeApp({
-//    credential: admin.credential.cert(serviceAccount),
-//    databaseURL:  "https://photo-loader.firebaseio.com",
-//    storageBucket: "gs://photo-loader.appspot.com/"
-//});
+exports.loadPictures = functions.https.onRequest((req, res) => {
 
-const express = require('express');
-const app = express();
-const bodyParser = require('body-parser');
-const multer = require('multer');
-const format = require('util').format;
-
-const fs = require('fs');
-const sharp = require('sharp');
-const stream = require('stream');
-
-app.use(function (req, res, next) { //allow cross origin requests
     res.setHeader("Access-Control-Allow-Methods", "POST, PUT, OPTIONS, DELETE, GET");
     res.header("Access-Control-Allow-Origin", "http://localhost:4200");
     res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
     res.header("Access-Control-Allow-Credentials", true);
-    next();
-});
 
-app.use(bodyParser.json());
+    const multer = require('multer');
+    const sharp = require('sharp');
+    const stream = require('stream');
+    const bodyParser = require('body-parser');
 
-const store = multer.diskStorage({ //multers disk storage settings
-    destination: function (req, file, cb) {
-        cb(null, './uploads/');
-    },
-    filename: function (req, file, cb) {
-        const datetimestamp = Date.now();
-        cb(null, file.fieldname + '-' + datetimestamp + '.' + file.originalname.split('.')[file.originalname.split('.').length - 1]);
-    }
-});
+    const upload = multer({
+        storage: multer.memoryStorage()
+    }).any();
 
-const upload = multer({
-    storage: multer.memoryStorage()
-}).any();
-
-
-app.post('/uploads', function (req, res) {
     upload(req, res, function (err) {
 
         let buffer = req.files[0].buffer;
+        console.log('buffer', buffer);
 
+        let path = req.body.path;
+        console.log('path', path);
         let tab = req.files[0].originalname.split('.');
         let name = tab[0];
         let extension = tab[1];
-        let pictureSizes = JSON.parse(req.body.sizes);
+        let pictureSizes = [
+            {
+                "width": 400,
+                "height": 250,
+            },
+            {
+                "width": 550,
+                "height": 450,
+            },
+            {
+                "width": 900,
+                "height": 750,
+            }
+        ];
 
         let pictures = [];
         for (i = 1; i < pictureSizes.length; i++) {
@@ -68,100 +58,84 @@ app.post('/uploads', function (req, res) {
         let promiseArray = [];
 
         for (i = 0 ; i < pictureSizes.length; i++ ) {
-            promiseArray.push(resize(buffer, pictures[i], pictureSizes[i].width, pictureSizes[i].height));
+            promiseArray.push(resize(buffer, pictures[i], pictureSizes[i].width, pictureSizes[i].height, path));
         }
 
         Promise.all(promiseArray).then(values => {
 
+            console.log('values', values);
+
             res.status(200).json({
-                pictures: pictures
+                pictures: values
             });
         }, err => {
             console.log('err', err);
             res.send('Loading error')
         });
 
-        //    //blobDeleteProcess('RG300.jpg');
-        //
     });
-});
 
+    let resize = function (picture, name, width, height, path) {
 
-let resize = function (picture, name, width, height) {
-
-    if (width == height) {
-        return sharp(picture)
-            .resize(width, height)
-            .crop()
-            .toBuffer()
-            .then(buffer => {
-                return blobCreateProcess(name, buffer);
-            })
-            .catch((err) => {
-                console.error('ERROR:', err);
-            });
-    } else {
-        return sharp(picture)
-            .resize(width, height)
-            .max()
-            .toBuffer()
-            .then(buffer => {
-                return blobCreateProcess(name, buffer);
-            })
-            .catch((err) => {
-                console.error('ERROR:', err);
-            });
-    }
-};
-
-
-let blobCreateProcess = function (fileName, buffer) {
-    let bucket = admin.storage().bucket();
-    let blob = bucket.file('images/' + fileName);
-    let blobStream = blob.createWriteStream();
-
-    return new Promise((resolve, reject) => {
-
-        blobStream.on('error', (err) => {
-            console.error(err);
-            reject(err);
-        });
-
-        blobStream.on('finish', () => {
-
-            blob
-                .makePublic()
-                .then((data) => {
-                    resolve('publicUrl');
+        if (width == height) {
+            return sharp(picture)
+                .resize(width, height)
+                .crop()
+                .toBuffer()
+                .then(buffer => {
+                    return blobCreateProcess(name, buffer, path);
                 })
                 .catch((err) => {
                     console.error('ERROR:', err);
-                    reject(err);
                 });
+        } else {
+            return sharp(picture)
+                .resize(width, height)
+                .max()
+                .toBuffer()
+                .then(buffer => {
+                    return blobCreateProcess(name, buffer, path);
+                })
+                .catch((err) => {
+                    console.error('ERROR:', err);
+                });
+        }
+    };
+
+
+    let blobCreateProcess = function (fileName, buffer, path) {
+        let bucket = admin.storage().bucket();
+        let file = bucket.file(path + fileName);
+        let stream = file.createWriteStream();
+
+        return new Promise((resolve, reject) => {
+
+            stream.on('error', (err) => {
+                console.error(err);
+                reject(err);
+            });
+
+            stream.on('finish', () => {
+
+                file
+                    .makePublic()
+                    .then(() => {
+                        resolve({
+                            name: fileName,
+                            url: `https://storage.googleapis.com/${functions.config().firebase.storageBucket}/${path}${fileName}`,
+                            ref: path + fileName
+                        });
+                    })
+                    .catch((err) => {
+                        console.error('ERROR:', err);
+                        reject(err);
+                    });
+            });
+            stream.end(buffer);
         });
-        blobStream.end(buffer);
-    });
+    };
 
-};
+});
 
-let blobDeleteProcess = function (fileName) {
 
-    // Deletion needs a filename with its extension
 
-    let blob = bucket.file(fileName);
-
-    blob
-        .delete()
-        .then(() => {
-            console.log('blob deleted');
-        })
-        .catch((err) => {
-            console.error('ERROR:', err);
-        });
-};
-
-exports.api = functions.https.onRequest(app);
-
-//app.listen('3001', function(){
-//    console.log('running on 3001');
-//});
